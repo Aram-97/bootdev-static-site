@@ -2,6 +2,7 @@ from textnode import TextType, TextNode
 from utils import extract_title, markdown_to_html_node
 import traceback
 import shutil
+import sys
 import os
 
 
@@ -20,24 +21,28 @@ def r_copy_content(src_path: str, des_path: str):
             r_copy_content(entry_path, target_path)
 
 
-def build_static_files():
+def build_static_files(src_dir_path, dest_dir_path):
     print("Building project...")
-    static_path = "./static"
-    public_path = "./public"
+
+    if src_dir_path.split("/")[0] != ".":
+        src_dir_path = os.path.join(os.path.curdir, src_dir_path)
+
+    if dest_dir_path.split("/")[0] != ".":
+        dest_dir_path = os.path.join(os.path.curdir, dest_dir_path)
 
     try:
-        if os.path.exists(public_path):
-            shutil.rmtree(public_path)
-            os.mkdir(public_path)
+        if os.path.exists(dest_dir_path):
+            shutil.rmtree(dest_dir_path)
+            os.mkdir(dest_dir_path)
         else:
-            os.mkdir(public_path)
+            os.mkdir(dest_dir_path)
 
-        r_copy_content(static_path, public_path)
+        r_copy_content(src_dir_path, dest_dir_path)
     except Exception as e:
         traceback.print_exc()
 
 
-def generate_page(from_path, template_path, dest_path):
+def generate_page(base_path, from_path, template_path, dest_path):
     print(f"Generating page from {from_path} to {dest_path} using {template_path}")
     markdown_content = ""
     template_content = ""
@@ -60,6 +65,9 @@ def generate_page(from_path, template_path, dest_path):
     template_content = template_content.replace("{{ Title }}", title)
     template_content = template_content.replace("{{ Content }}", content)
 
+    template_content = template_content.replace('href="/', f'href="{base_path}')
+    template_content = template_content.replace('src="/', f'src="{base_path}')
+
     dest_dirname = os.path.dirname(dest_path)
 
     if not os.path.exists(dest_dirname):
@@ -74,7 +82,7 @@ def generate_page(from_path, template_path, dest_path):
         print(f"Error while writing to file '{dest_path}': {e}")
 
 
-def generate_pages_recursive(src_dir_path, template_path, dest_dir_path):
+def generate_pages_recursive(base_path, src_dir_path, template_path, dest_dir_path):
     if not os.path.isdir(src_dir_path):
         raise Exception("Path is not a folder!")
 
@@ -87,7 +95,9 @@ def generate_pages_recursive(src_dir_path, template_path, dest_dir_path):
         entry_path = os.path.join(full_root_path, entry)
 
         if not os.path.isfile(entry_path):
-            generate_pages_recursive(entry_path, template_path, dest_dir_path)
+            generate_pages_recursive(
+                base_path, entry_path, template_path, dest_dir_path
+            )
             continue
 
         file_name = entry.split(".")[0]
@@ -98,12 +108,13 @@ def generate_pages_recursive(src_dir_path, template_path, dest_dir_path):
 
         target_path = os.path.join(*full_root_path.split("/")[2:], f"{file_name}.html")
         public_path = os.path.join(os.path.curdir, dest_dir_path, target_path)
-        generate_page(entry_path, template_path, public_path)
+        generate_page(base_path, entry_path, template_path, public_path)
 
 
 def main():
-    build_static_files()
-    generate_pages_recursive("content", "template.html", "public")
+    base_path = sys.argv[1] or "/"
+    build_static_files("static", "docs")
+    generate_pages_recursive(base_path, "content", "template.html", "docs")
 
 
 main()
